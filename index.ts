@@ -1,28 +1,35 @@
+import * as dotenv from "dotenv";
 import fs from "fs/promises";
 const readline = require("readline");
-import { Document, VectorStoreIndex } from "llamaindex";
+
+import { MongoClient } from "mongodb";
+import { MongoDBAtlasVectorSearch,Document, VectorStoreIndex ,QdrantVectorStore,OpenAIEmbedding, serviceContextFromDefaults} from "llamaindex";
+dotenv.config();
+
 async function main() {
-  // Load essay from abramov.txt in Node
-  const essay = await fs.readFile(
-    "node_modules/llamaindex/examples/abramov.txt",
-    "utf-8",
-  );
-
-
-
-  // Create Document object with essay
-  const document = new Document({ text: essay });
-
-  // Split text and create embeddings. Store them in a VectorStoreIndex
-  const index = await VectorStoreIndex.fromDocuments([document]);
-
-  // Query the index
-  const queryEngine = index.asQueryEngine();
+ 
     async function answerQuestion(query:string){
-        const response = await queryEngine.query({
-            'query': query,
+        // const response = await queryEngine.query({
+        //     'query': query,
+        // });
+        const client = new MongoClient(process.env.mongo!);
+        const serviceContext = serviceContextFromDefaults();
+        const store = new MongoDBAtlasVectorSearch({
+          mongodbClient: client,
+          dbName: 'RAG',
+          collectionName: 'vectorCollectionName',
+          indexName: 'viktor',
         });
-        return response.toString();
+      
+        const index = await VectorStoreIndex.fromVectorStore(store, serviceContext);
+      
+        const retriever = index.asRetriever({ similarityTopK: 5 });
+        const queryEngine = index.asQueryEngine({ retriever });
+        const result = await queryEngine.query({
+          'query': query,
+        });
+        // console.log(result)
+        return result.response.toString();
     }
 
   
@@ -41,8 +48,6 @@ async function main() {
   });
 
   rl.prompt();
-  // Output response
-//   console.log(response.toString());
 }
 
 main();
